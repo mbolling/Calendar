@@ -1211,7 +1211,8 @@ private val timeZoneLock = Any()
 
 /**
  * Joda-Time reads the device time zone once and caches it for the life of the process, so a running app keeps
- * showing and saving everything in the old zone after the device zone changes. Returns true if the zone changed.
+ * showing and saving everything in the old zone after the device zone changes. Moves stored all-day events to the
+ * new zone before anything reads them in it. Returns true if the zone changed.
  */
 fun Context.syncTimeZone(): Boolean = synchronized(timeZoneLock) {
     val deviceZone = try {
@@ -1225,6 +1226,7 @@ fun Context.syncTimeZone(): Boolean = synchronized(timeZoneLock) {
     }
 
     DateTimeZone.setDefault(deviceZone)
+    EventsDatabase.reanchorAllDayEvents(EventsDatabase.getInstance(applicationContext).openHelper.writableDatabase)
     updateWidgets()
     true
 }
