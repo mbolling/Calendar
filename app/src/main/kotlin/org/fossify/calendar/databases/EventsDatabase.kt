@@ -9,8 +9,13 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import org.fossify.calendar.R
 import org.fossify.calendar.extensions.config
+import org.fossify.calendar.helpers.AllDayTimes
+import org.fossify.calendar.helpers.CALDAV
 import org.fossify.calendar.helpers.Converters
+import org.fossify.calendar.helpers.FLAG_ALL_DAY
 import org.fossify.calendar.helpers.LOCAL_CALENDAR_ID
+import org.fossify.calendar.helpers.TYPE_EVENT
+import org.fossify.calendar.helpers.reanchorAllDayTimes
 import org.fossify.calendar.interfaces.CalendarsDao
 import org.fossify.calendar.interfaces.EventsDao
 import org.fossify.calendar.interfaces.TasksDao
@@ -19,7 +24,10 @@ import org.fossify.calendar.models.CalendarEntity
 import org.fossify.calendar.models.Event
 import org.fossify.calendar.models.Task
 import org.fossify.calendar.models.Widget
+import org.fossify.commons.extensions.getLongValue
 import org.fossify.commons.extensions.getProperPrimaryColor
+import org.fossify.commons.extensions.getStringValue
+import org.joda.time.DateTimeZone
 import java.util.concurrent.Executors
 
 @Database(
@@ -54,6 +62,12 @@ abstract class EventsDatabase : RoomDatabase() {
                                     super.onCreate(db)
                                     insertLocalCalendar(context)
                                 }
+
+                                // runs before the first query of the process returns
+                                override fun onOpen(db: SupportSQLiteDatabase) {
+                                    super.onOpen(db)
+                                    reanchorAllDayEvents(db)
+                                }
                             })
                             .addMigrations(MIGRATION_1_2)
                             .addMigrations(MIGRATION_2_3)
@@ -75,6 +89,61 @@ abstract class EventsDatabase : RoomDatabase() {
 
         fun destroyInstance() {
             db = null
+        }
+
+        /**
+         * All-day events are stored anchored in the time zone they were saved in, but read in the current one. Moves
+         * those stored in another zone to the same dates in [zone]. Writes directly, nothing is pushed to CalDAV, as
+         * the next sync derives the same values. Returns true if any event changed.
+         */
+        fun reanchorAllDayEvents(db: SupportSQLiteDatabase, zone: DateTimeZone = DateTimeZone.getDefault()): Boolean {
+            val updates = ArrayList<Array<Any>>()
+            db.query(
+                "SELECT id, start_ts, end_ts, repeat_limit, time_zone, source FROM events " +
+                    "WHERE (flags & $FLAG_ALL_DAY) != 0 AND type = $TYPE_EVENT AND time_zone != ?",
+                arrayOf(zone.id)
+            ).use { cursor ->
+                while (cursor.moveToNext()) {
+                    val times = AllDayTimes(
+                        startTS = cursor.getLongValue("start_ts"),
+                        endTS = cursor.getLongValue("end_ts"),
+                        repeatLimit = cursor.getLongValue("repeat_limit")
+                    )
+                    val storedZone = try {
+                        DateTimeZone.forID(cursor.getStringValue("time_zone"))
+                    } catch (_: IllegalArgumentException) {
+                        null
+                    }
+
+                    // events without a known zone cannot be moved, only start tracking them from now on
+                    val newTimes = if (storedZone == null) {
+                        times
+                    } else {
+                        val isSynced = cursor.getStringValue("source").startsWith(CALDAV)
+                        reanchorAllDayTimes(times, storedZone, zone, isSynced)
+                    }
+                    val id = cursor.getLongValue("id")
+                    updates.add(arrayOf(newTimes.startTS, newTimes.endTS, newTimes.repeatLimit, zone.id, id))
+                }
+            }
+
+            if (updates.isEmpty()) {
+                return false
+            }
+
+            db.beginTransaction()
+            try {
+                updates.forEach {
+                    db.execSQL(
+                        "UPDATE events SET start_ts = ?, end_ts = ?, repeat_limit = ?, time_zone = ? WHERE id = ?",
+                        it
+                    )
+                }
+                db.setTransactionSuccessful()
+            } finally {
+                db.endTransaction()
+            }
+            return true
         }
 
         private fun insertLocalCalendar(context: Context) {

@@ -5,6 +5,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Fixed
+- Fixed all-day events moving to other days after changing the time zone ([#783])
 
 ## [1.12.2] - 2026-11-06
 ### Changed
@@ -275,6 +277,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [#729]: https://github.com/FossifyOrg/Calendar/issues/729
 [#732]: https://github.com/FossifyOrg/Calendar/issues/732
 [#761]: https://github.com/FossifyOrg/Calendar/issues/761
+[#783]: https://github.com/FossifyOrg/Calendar/issues/783
 [#808]: https://github.com/FossifyOrg/Calendar/issues/808
 [#818]: https://github.com/FossifyOrg/Calendar/issues/818
 [#826]: https://github.com/FossifyOrg/Calendar/issues/826
