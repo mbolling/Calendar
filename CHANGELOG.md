@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 ### Fixed
 - Fixed all-day events moving to other days after changing the time zone ([#783])
+- Fixed synced all-day events losing their last day when it ends with a daylight saving time change
 
 ## [1.12.2] - 2026-11-06
 ### Changed

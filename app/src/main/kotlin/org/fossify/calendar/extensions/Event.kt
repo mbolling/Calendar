@@ -21,13 +21,14 @@ fun Event.toLocalAllDayEvent() {
 fun Event.toUtcAllDayEvent() {
     require(getIsAllDay()) { "Must be an all day event!" }
 
-    if (endTS >= startTS) {
-        endTS += TWELVE_HOURS
+    endTS = if (endTS >= startTS) {
+        Formatter.getShiftedUtcEndTS(endTS)
+    } else {
+        Formatter.getShiftedUtcTS(endTS)
     }
 
     timeZone = DateTimeZone.UTC.id
     startTS = Formatter.getShiftedUtcTS(startTS)
-    endTS = Formatter.getShiftedUtcTS(endTS)
 }
 
 // this is to make sure the repetition ends on the date set when creating the original event
