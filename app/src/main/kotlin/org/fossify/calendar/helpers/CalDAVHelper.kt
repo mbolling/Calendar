@@ -191,6 +191,8 @@ class CalDAVHelper(val context: Context) {
             importIdsMap[it.importId] = it
         }
 
+        val childExceptions = getCalDAVOccurrenceExceptions(calendarId)
+
         val uri = Events.CONTENT_URI
         val projection = arrayOf(
             Events._ID,
@@ -316,18 +318,17 @@ class CalDAVHelper(val context: Context) {
 
                     // store the event in the local db only if it is an occurrence that has been modified and not deleted
                     if (status != Events.STATUS_CANCELED && title.isNotEmpty()) {
-                        val storedEventId = context.eventsDB.getEventIdWithImportId(importId)
-                        if (storedEventId != null) {
-                            event.id = storedEventId
-                        }
+                        event.id = importIdsMap[importId]?.id
                         event.parentId = parentEvent.id!!
-                        eventsHelper.insertEvent(
-                            event = event,
-                            addToCalDAV = false,
-                            showToasts = false,
-                            enableCalendar = false,
-                            updateWidgets = false
-                        )
+                        if (importIdsMap[importId]?.copy(lastUpdated = 0L) != event) {
+                            eventsHelper.insertEvent(
+                                event = event,
+                                addToCalDAV = false,
+                                showToasts = false,
+                                enableCalendar = false,
+                                updateWidgets = false
+                            )
+                        }
                     } else {
                         // delete the deleted exception event from local db
                         val storedEventId = context.eventsDB.getEventIdWithImportId(importId)
@@ -370,6 +371,9 @@ class CalDAVHelper(val context: Context) {
                 }
             }
 
+            // modified and cancelled occurrences are stored as exceptions of their parent too, keep them
+            childExceptions[importId]?.forEach(event::addRepetitionException)
+
             if (importIdsMap.containsKey(event.importId)) {
                 val existingEvent = importIdsMap[importId]
                 val originalEventId = existingEvent!!.id
@@ -377,7 +381,6 @@ class CalDAVHelper(val context: Context) {
                 existingEvent.apply {
                     this.id = null
                     lastUpdated = 0L
-                    repetitionExceptions = ArrayList()
                 }
 
                 if (existingEvent.hashCode() != event.hashCode() && title.isNotEmpty()) {
@@ -699,6 +702,17 @@ class CalDAVHelper(val context: Context) {
         }
 
         return attendees
+    }
+
+    // the day codes of modified or cancelled occurrences, mapped by the import id of their parent event
+    private fun getCalDAVOccurrenceExceptions(calendarId: Int) = HashMap<String, ArrayList<String>>().apply {
+        val projection = arrayOf(Events.ORIGINAL_ID, Events.ORIGINAL_INSTANCE_TIME)
+        val selection = "${Events.CALENDAR_ID} = $calendarId AND ${Events.DELETED} = 0 AND ${Events.ORIGINAL_ID} > 0"
+        context.queryCursorInlined(Events.CONTENT_URI, projection, selection) { cursor ->
+            val parentImportId = getCalDAVEventImportId(calendarId, cursor.getLongValue(Events.ORIGINAL_ID))
+            val dayCode = Formatter.getDayCodeFromTS(cursor.getLongValue(Events.ORIGINAL_INSTANCE_TIME) / 1000L)
+            getOrPut(parentImportId) { ArrayList() }.add(dayCode)
+        }
     }
 
     private fun getCalDAVEventImportId(calendarId: Int, eventId: Long): String {
