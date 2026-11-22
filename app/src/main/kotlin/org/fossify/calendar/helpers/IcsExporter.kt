@@ -169,9 +169,8 @@ class IcsExporter(private val context: Context) {
                 writeLn("$DTSTART;$VALUE=$DATE:${Formatter.getDayCodeFromTS(event.startTS, tz)}")
                 writeLn(
                     "$DTEND;$VALUE=$DATE:${
-                        Formatter.getDayCodeFromTS(
-                            event.endTS + TWELVE_HOURS,
-                            tz
+                        Formatter.getUTCDayCodeFromTS(
+                            Formatter.getShiftedUtcEndTS(event.endTS, tz)
                         )
                     }"
                 )
