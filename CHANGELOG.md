@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Fixed all-day events moving to other days after changing the time zone ([#783])
 - Fixed synced all-day events losing their last day when it ends with a daylight saving time change
+- Fixed synced weekly all-day events repeating on the wrong weekday in time zones west of UTC ([#143])
 
 ## [1.12.2] - 2026-11-06
 ### Changed
@@ -249,6 +250,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [#103]: https://github.com/FossifyOrg/Calendar/issues/103
 [#135]: https://github.com/FossifyOrg/Calendar/issues/135
 [#138]: https://github.com/FossifyOrg/Calendar/issues/138
+[#143]: https://github.com/FossifyOrg/Calendar/issues/143
 [#148]: https://github.com/FossifyOrg/Calendar/issues/148
 [#196]: https://github.com/FossifyOrg/Calendar/issues/196
 [#217]: https://github.com/FossifyOrg/Calendar/issues/217

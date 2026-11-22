@@ -70,6 +70,12 @@ class Parser {
         return EventRepetition(repeatInterval, repeatRule, repeatLimit)
     }
 
+    // the calendar provider stores all-day events at UTC midnight, the repeat rule needs the local start day
+    fun parseProviderRepeatInterval(fullString: String, startTS: Long, isAllDay: Boolean): EventRepetition {
+        val localStartTS = if (isAllDay) Formatter.getShiftedLocalTS(startTS) else startTS
+        return parseRepeatInterval(fullString, localStartTS)
+    }
+
     private fun getFrequencySeconds(interval: String) = when (interval) {
         DAILY -> DAY
         WEEKLY -> WEEK
