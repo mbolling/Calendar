@@ -109,6 +109,19 @@ class Parser {
         }
     }
 
+    // the day code of an EXDATE value like "20190216T230000Z" or "20201208T000000", null if it is not a date
+    fun parseExdateDayCode(value: String, isAllDay: Boolean): String? {
+        // all-day exceptions are stored at midnight UTC, so their UTC date is the day
+        return if (value.endsWith("Z") && !isAllDay) {
+            // convert for example "20190216T230000Z" to "20190217000000" in Slovakia in a weird way
+            val formatter = DateTimeFormat.forPattern("yyyyMMdd'T'HHmmss'Z'")
+            val offset = DateTimeZone.getDefault().getOffset(System.currentTimeMillis())
+            Formatter.getDayCodeFromDateTime(formatter.parseDateTime(value).plusMillis(offset))
+        } else {
+            value.substring(0, Formatter.DAYCODE_PATTERN.length).takeIf { it.areDigitsOnly() }
+        }
+    }
+
     private fun parseLongFormat(digitString: String, dateTimeZone: DateTimeZone): Long {
         val dateTimeFormat = DateTimeFormat.forPattern("yyyyMMddHHmmss")
         return dateTimeFormat.parseDateTime(digitString).withZoneRetainFields(dateTimeZone).seconds()

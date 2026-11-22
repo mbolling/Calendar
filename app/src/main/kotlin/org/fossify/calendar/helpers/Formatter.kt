@@ -131,6 +131,10 @@ object Formatter {
 
     fun getUTCDayCodeFromTS(ts: Long) = getUTCDateTimeFromTS(ts).toString(DAYCODE_PATTERN)
 
+    // occurrences of all-day events start at midnight UTC, so their day is the UTC date
+    fun getOccurrenceDayCode(ts: Long, isAllDay: Boolean) =
+        if (isAllDay) getUTCDayCodeFromTS(ts) else getDayCodeFromTS(ts)
+
     fun getYearFromDayCode(dayCode: String) = getDateTimeFromCode(dayCode).toString(YEAR_PATTERN)
 
     fun getShiftedTS(dateTime: DateTime, toZone: DateTimeZone) = dateTime.withTimeAtStartOfDay().withZoneRetainFields(toZone).seconds()

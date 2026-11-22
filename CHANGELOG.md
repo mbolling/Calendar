@@ -5,6 +5,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Fixed
+- Fixed deleting or moving an occurrence of a synced all-day event affecting the previous day west of UTC ([#505])
 
 ## [1.12.2] - 2026-11-06
 ### Changed
@@ -257,6 +259,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [#462]: https://github.com/FossifyOrg/Calendar/issues/462
 [#484]: https://github.com/FossifyOrg/Calendar/issues/484
 [#486]: https://github.com/FossifyOrg/Calendar/issues/486
+[#505]: https://github.com/FossifyOrg/Calendar/issues/505
 [#521]: https://github.com/FossifyOrg/Calendar/issues/521
 [#550]: https://github.com/FossifyOrg/Calendar/issues/550
 [#551]: https://github.com/FossifyOrg/Calendar/issues/551
