@@ -121,11 +121,13 @@ import org.fossify.commons.helpers.isSPlus
 import org.fossify.commons.helpers.isTiramisuPlus
 import org.joda.time.DateTime
 import org.joda.time.DateTimeConstants
+import org.joda.time.DateTimeZone
 import org.joda.time.Days
 import org.joda.time.LocalDate
 import java.io.File
 import java.io.FileOutputStream
 import java.util.Calendar
+import java.util.TimeZone
 import java.util.concurrent.TimeUnit
 import kotlin.math.absoluteValue
 import kotlin.math.roundToInt
@@ -1203,4 +1205,26 @@ fun Context.scheduleDummyAlarm() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
     )
+}
+
+private val timeZoneLock = Any()
+
+/**
+ * Joda-Time reads the device time zone once and caches it for the life of the process, so a running app keeps
+ * showing and saving everything in the old zone after the device zone changes. Returns true if the zone changed.
+ */
+fun Context.syncTimeZone(): Boolean = synchronized(timeZoneLock) {
+    val deviceZone = try {
+        DateTimeZone.forTimeZone(TimeZone.getDefault())
+    } catch (_: IllegalArgumentException) {
+        return false
+    }
+
+    if (deviceZone == DateTimeZone.getDefault()) {
+        return false
+    }
+
+    DateTimeZone.setDefault(deviceZone)
+    updateWidgets()
+    true
 }
