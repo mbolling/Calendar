@@ -39,6 +39,7 @@ class CalDAVSyncTest {
     private val color = 0xFF0000FF.toInt()
     private val marker = 123456789L
     private val start = DateTime.now().plusDays(1).withTime(12, 0, 0, 0)
+    private val originalZone = DateTimeZone.getDefault()
     private lateinit var originalSyncedCalendarIds: String
     private var providerCalendarId = 0L
     private var localCalendar: CalendarEntity? = null
@@ -104,6 +105,7 @@ class CalDAVSyncTest {
             ContentUris.withAppendedId(asSyncAdapter(Calendars.CONTENT_URI), providerCalendarId), null, null
         )
         context.config.caldavSyncedCalendarIds = originalSyncedCalendarIds
+        DateTimeZone.setDefault(originalZone)
     }
 
     @Test
@@ -131,6 +133,48 @@ class CalDAVSyncTest {
         assertEquals(dayCodes(4, 5, 6), parent().repetitionExceptions.sorted())
     }
 
+    @Test
+    fun allDayExceptionsAreOnTheirUtcDateWestOfUtc() {
+        // all-day occurrences are stored at midnight UTC, which is the evening before in New York
+        DateTimeZone.setDefault(DateTimeZone.forID("America/New_York"))
+        val day = DateTime.now(DateTimeZone.UTC).plusDays(1).withTimeAtStartOfDay()
+        val allDayId = insertEvent(
+            "All-day",
+            day,
+            Events.RRULE to "FREQ=DAILY;COUNT=10",
+            Events.EXDATE to day.plusDays(2).toString(EXDATE_FORMAT),
+            allDay = true
+        )
+        insertEvent(
+            "All-day moved",
+            day.plusDays(6),
+            Events.ORIGINAL_ID to allDayId,
+            Events.ORIGINAL_INSTANCE_TIME to day.plusDays(4).millis,
+            Events.ORIGINAL_ALL_DAY to 1,
+            allDay = true
+        )
+        insertEvent(
+            "All-day cancelled",
+            day.plusDays(5),
+            Events.ORIGINAL_ID to allDayId,
+            Events.ORIGINAL_INSTANCE_TIME to day.plusDays(5).millis,
+            Events.ORIGINAL_ALL_DAY to 1,
+            Events.STATUS to Events.STATUS_CANCELED,
+            allDay = true
+        )
+
+        val expected = listOf(2, 4, 5).map { day.plusDays(it).toString(Formatter.DAYCODE_PATTERN) }
+        val allDayParent = { context.eventsDB.getEventWithImportId("$CALDAV-$providerCalendarId-$allDayId")!! }
+        sync()
+        assertEquals(expected, allDayParent().repetitionExceptions.sorted())
+
+        // the day codes of the parent and its children must agree, otherwise every sync rewrites the parent
+        storedEvents().forEach { context.eventsDB.insertOrUpdate(it.copy(lastUpdated = marker)) }
+        sync()
+        assertTrue(storedEvents().all { it.lastUpdated == marker })
+        assertEquals(expected, allDayParent().repetitionExceptions.sorted())
+    }
+
     private fun sync() {
         // refreshCalendars returns without a callback while another refresh is running
         var synced = false
@@ -149,16 +193,22 @@ class CalDAVSyncTest {
 
     private fun dayCodes(vararg days: Int) = days.map { Formatter.getDayCodeFromDateTime(start.plusDays(it)) }
 
-    private fun insertEvent(title: String, start: DateTime, vararg values: Pair<String, Any?>): Long {
+    private fun insertEvent(
+        title: String,
+        start: DateTime,
+        vararg values: Pair<String, Any?>,
+        allDay: Boolean = false
+    ): Long {
         val contentValues = eventValues(*values).apply {
             put(Events.CALENDAR_ID, providerCalendarId)
             put(Events.TITLE, title)
-            put(Events.EVENT_TIMEZONE, DateTimeZone.getDefault().id)
+            put(Events.EVENT_TIMEZONE, if (allDay) "UTC" else DateTimeZone.getDefault().id)
+            put(Events.ALL_DAY, if (allDay) 1 else 0)
             put(Events.DTSTART, start.millis)
             if (containsKey(Events.RRULE)) {
-                put(Events.DURATION, "PT1H")
+                put(Events.DURATION, if (allDay) "P1D" else "PT1H")
             } else {
-                put(Events.DTEND, start.plusHours(1).millis)
+                put(Events.DTEND, if (allDay) start.plusDays(1).millis else start.plusHours(1).millis)
             }
         }
         return ContentUris.parseId(context.contentResolver.insert(asSyncAdapter(Events.CONTENT_URI), contentValues)!!)

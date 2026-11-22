@@ -27,7 +27,6 @@ import org.fossify.calendar.models.CalendarEntity
 import org.fossify.calendar.models.Event
 import org.fossify.calendar.models.Reminder
 import org.fossify.calendar.objects.States.isUpdatingCalDAV
-import org.fossify.commons.extensions.areDigitsOnly
 import org.fossify.commons.extensions.getIntValue
 import org.fossify.commons.extensions.getIntValueOrNull
 import org.fossify.commons.extensions.getLongValue
@@ -39,7 +38,6 @@ import org.fossify.commons.extensions.toast
 import org.fossify.commons.helpers.PERMISSION_READ_CALENDAR
 import org.fossify.commons.helpers.PERMISSION_WRITE_CALENDAR
 import org.joda.time.DateTimeZone
-import org.joda.time.format.DateTimeFormat
 import kotlin.math.max
 
 @SuppressLint("MissingPermission")
@@ -206,6 +204,7 @@ class CalDAVHelper(val context: Context) {
             Events.RRULE,
             Events.ORIGINAL_ID,
             Events.ORIGINAL_INSTANCE_TIME,
+            Events.ORIGINAL_ALL_DAY,
             Events.EVENT_LOCATION,
             Events.EVENT_TIMEZONE,
             Events.CALENDAR_TIME_ZONE,
@@ -242,6 +241,7 @@ class CalDAVHelper(val context: Context) {
             val location = cursor.getStringValue(Events.EVENT_LOCATION) ?: ""
             val originalId = cursor.getStringValue(Events.ORIGINAL_ID)
             val originalInstanceTime = cursor.getLongValue(Events.ORIGINAL_INSTANCE_TIME)
+            val originalAllDay = cursor.getIntValue(Events.ORIGINAL_ALL_DAY) == 1
             val reminders = getCalDAVEventReminders(id)
             val attendees = getCalDAVEventAttendees(id, calendar)
             val accessLevel = cursor.getIntValue(Events.ACCESS_LEVEL)
@@ -302,7 +302,7 @@ class CalDAVHelper(val context: Context) {
             if (originalInstanceTime != 0L) {
                 val parentImportId = "$source-$originalId"
                 val parentEvent = context.eventsDB.getEventWithImportId(parentImportId)
-                val originalDayCode = Formatter.getDayCodeFromTS(originalInstanceTime / 1000L)
+                val originalDayCode = Formatter.getOccurrenceDayCode(originalInstanceTime / 1000L, originalAllDay)
                 if (parentEvent != null) {
                     // add this event to the parent event's list of exceptions
                     if (!parentEvent.repetitionExceptions.contains(originalDayCode)) {
@@ -353,20 +353,7 @@ class CalDAVHelper(val context: Context) {
                 for (line in lines) {
                     val dates = line.split(",", ";")
                     dates.filter { it.isNotEmpty() && it[0].isDigit() }.forEach {
-                        if (it.endsWith("Z")) {
-                            // convert for example "20190216T230000Z" to "20190217000000" in Slovakia in a weird way
-                            val formatter = DateTimeFormat.forPattern("yyyyMMdd'T'HHmmss'Z'")
-                            val offset =
-                                DateTimeZone.getDefault().getOffset(System.currentTimeMillis())
-                            val dt = formatter.parseDateTime(it).plusMillis(offset)
-                            val dayCode = Formatter.getDayCodeFromDateTime(dt)
-                            event.addRepetitionException(dayCode)
-                        } else {
-                            val potentialTS = it.substring(0, 8)
-                            if (potentialTS.areDigitsOnly()) {
-                                event.addRepetitionException(potentialTS)
-                            }
-                        }
+                        Parser().parseExdateDayCode(it, event.getIsAllDay())?.let(event::addRepetitionException)
                     }
                 }
             }
@@ -706,11 +693,13 @@ class CalDAVHelper(val context: Context) {
 
     // the day codes of modified or cancelled occurrences, mapped by the import id of their parent event
     private fun getCalDAVOccurrenceExceptions(calendarId: Int) = HashMap<String, ArrayList<String>>().apply {
-        val projection = arrayOf(Events.ORIGINAL_ID, Events.ORIGINAL_INSTANCE_TIME)
+        val projection = arrayOf(Events.ORIGINAL_ID, Events.ORIGINAL_INSTANCE_TIME, Events.ORIGINAL_ALL_DAY)
         val selection = "${Events.CALENDAR_ID} = $calendarId AND ${Events.DELETED} = 0 AND ${Events.ORIGINAL_ID} > 0"
         context.queryCursorInlined(Events.CONTENT_URI, projection, selection) { cursor ->
             val parentImportId = getCalDAVEventImportId(calendarId, cursor.getLongValue(Events.ORIGINAL_ID))
-            val dayCode = Formatter.getDayCodeFromTS(cursor.getLongValue(Events.ORIGINAL_INSTANCE_TIME) / 1000L)
+            val originalInstanceTS = cursor.getLongValue(Events.ORIGINAL_INSTANCE_TIME) / 1000L
+            val originalAllDay = cursor.getIntValue(Events.ORIGINAL_ALL_DAY) == 1
+            val dayCode = Formatter.getOccurrenceDayCode(originalInstanceTS, originalAllDay)
             getOrPut(parentImportId) { ArrayList() }.add(dayCode)
         }
     }
