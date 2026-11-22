@@ -1,7 +1,10 @@
 package org.fossify.calendar.activities
 
 import android.annotation.SuppressLint
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.ShortcutInfo
 import android.graphics.drawable.Icon
 import android.graphics.drawable.LayerDrawable
@@ -12,6 +15,7 @@ import android.provider.ContactsContract.Contacts
 import android.provider.ContactsContract.Data
 import android.view.MenuItem
 import android.widget.Toast
+import androidx.core.content.ContextCompat
 import androidx.core.graphics.drawable.toDrawable
 import androidx.fragment.app.FragmentManager
 import org.fossify.calendar.R
@@ -32,6 +36,7 @@ import org.fossify.calendar.extensions.getFirstDayOfWeek
 import org.fossify.calendar.extensions.launchNewEventIntent
 import org.fossify.calendar.extensions.launchNewTaskIntent
 import org.fossify.calendar.extensions.seconds
+import org.fossify.calendar.extensions.syncTimeZone
 import org.fossify.calendar.extensions.tryImportEventsFromFile
 import org.fossify.calendar.extensions.updateWidgets
 import org.fossify.calendar.fragments.DayFragmentsHolder
@@ -159,6 +164,11 @@ class MainActivity : SimpleActivity(), RefreshRecyclerViewListener {
     private var mStoredHighlightWeekends = false
     private var mStoredStartWeekWithCurrentDay = false
     private var mStoredHighlightWeekendsColor = 0
+    private var mStoredTimeZone = DateTimeZone.getDefault().id
+
+    private val timeZoneChangedReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) = refreshIfTimeZoneChanged()
+    }
 
     // search results have endless scrolling, so reaching the top/bottom fetches further results
     private var minFetchedSearchTS = 0L
@@ -253,6 +263,14 @@ class MainActivity : SimpleActivity(), RefreshRecyclerViewListener {
 
     override fun onResume() {
         super.onResume()
+        ContextCompat.registerReceiver(
+            this,
+            timeZoneChangedReceiver,
+            IntentFilter(Intent.ACTION_TIMEZONE_CHANGED),
+            ContextCompat.RECEIVER_NOT_EXPORTED
+        )
+        refreshIfTimeZoneChanged()
+
         if (mStoredTextColor != getProperTextColor() || mStoredBackgroundColor != getProperBackgroundColor() || mStoredPrimaryColor != getProperPrimaryColor()
             || mStoredDayCode != Formatter.getTodayCode() || mStoredDimPastEvents != config.dimPastEvents || mStoredDimCompletedTasks != config.dimCompletedTasks
             || mStoredHighlightWeekends != config.highlightWeekends || mStoredHighlightWeekendsColor != config.highlightWeekendsColor
@@ -307,7 +325,22 @@ class MainActivity : SimpleActivity(), RefreshRecyclerViewListener {
 
     override fun onPause() {
         super.onPause()
+        unregisterReceiver(timeZoneChangedReceiver)
         storeStateVariables()
+    }
+
+    // the device zone can change while the app is running, redraw once the app follows it
+    private fun refreshIfTimeZoneChanged() {
+        ensureBackgroundThread {
+            syncTimeZone()
+            runOnUiThread {
+                val timeZone = DateTimeZone.getDefault().id
+                if (timeZone != mStoredTimeZone && !isDestroyed) {
+                    mStoredTimeZone = timeZone
+                    updateViewPager()
+                }
+            }
+        }
     }
 
     override fun onDestroy() {
