@@ -138,4 +138,8 @@ object Formatter {
     fun getShiftedLocalTS(ts: Long) = getShiftedTS(dateTime = getUTCDateTimeFromTS(ts), toZone = DateTimeZone.getDefault())
 
     fun getShiftedUtcTS(ts: Long) = getShiftedTS(dateTime = getDateTimeFromTS(ts), toZone = DateTimeZone.UTC)
+
+    // the exclusive end of an all-day event whose last day contains ts: midnight UTC of the following day
+    fun getShiftedUtcEndTS(ts: Long, tz: DateTimeZone = DateTimeZone.getDefault()) =
+        getDateTimeFromTS(ts, tz).toLocalDate().plusDays(1).toDateTimeAtStartOfDay(DateTimeZone.UTC).seconds()
 }
