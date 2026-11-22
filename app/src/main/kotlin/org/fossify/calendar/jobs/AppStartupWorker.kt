@@ -17,6 +17,7 @@ import org.fossify.calendar.extensions.recheckCalDAVCalendars
 import org.fossify.calendar.extensions.scheduleAllEvents
 import org.fossify.calendar.extensions.scheduleDummyAlarm
 import org.fossify.calendar.extensions.scheduleNextAutomaticBackup
+import org.fossify.calendar.extensions.syncTimeZone
 import org.fossify.commons.extensions.notificationManager
 
 /**
@@ -29,6 +30,7 @@ class AppStartupWorker(
 
     override suspend fun doWork(): Result = with(applicationContext) {
         try {
+            syncTimeZone()
             scheduleAllEvents()
             scheduleDummyAlarm()
             scheduleNextAutomaticBackup()
