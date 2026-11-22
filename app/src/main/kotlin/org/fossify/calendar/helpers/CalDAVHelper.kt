@@ -260,7 +260,7 @@ class CalDAVHelper(val context: Context) {
                 ?: cursor.getStringValue(Events.CALENDAR_TIME_ZONE) ?: DateTimeZone.getDefault().id
 
             val source = "$CALDAV-$calendarId"
-            val repeatRule = Parser().parseRepeatInterval(rrule, startTS)
+            val repeatRule = Parser().parseProviderRepeatInterval(rrule, startTS, allDay == 1)
             val event = Event(
                 id = null,
                 startTS = startTS,
